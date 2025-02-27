@@ -141,6 +141,7 @@ let logsColumnDefs = [
         cellRenderer: (params) => {
             let logString = '';
             let counter = 0;
+
             if (updatedSelFieldList) {
                 selectedFieldsList = _.intersection(selectedFieldsList, availColNames);
             } else {
@@ -261,6 +262,16 @@ const gridOptions = {
             }
         }
     }, 250),
+    onRowDataUpdated: function (params) {
+        // When row data updates (e.g., from WebSocket), update the histogram
+        if (typeof window.updateHistogram === 'function') {
+            window.updateHistogram(logsRowData); // Pass the full logsRowData to update the histogram
+        }
+        // Optionally update timechart visualization if runTimechart is true
+        if (window.runTimechart && typeof window.updateTimechartVisualization === 'function' && window.timechartData) {
+            window.updateTimechartVisualization(window.timechartData);
+        }
+    },
     overlayLoadingTemplate: '<div class="ag-overlay-loading-center"><div class="loading-icon"></div><div class="loading-text">Loading...</div></div>',
     onGridReady: function (_params) {
         const eGridDiv = document.querySelector('#LogResultsGrid');
@@ -272,13 +283,41 @@ const gridOptions = {
                 margin-left: 5px;
                 display: none;
             }
-              
+
             .ag-header-cell:not([col-id="timestamp"]):not([col-id="logs"]):hover .close-icon
                 display: inline-block;
             }
-            
+
         `;
         eGridDiv.appendChild(style);
+
+        // Ensure DOM is ready and histogram canvas exists before initializing
+        $(document).ready(function () {
+            const histogramCanvas = document.getElementById('histogram');
+            if (histogramCanvas && typeof window.updateHistogram === 'function') {
+                window.updateHistogram(logsRowData); // Initial histogram update with current data
+            } else {
+                console.warn("Histogram canvas '#histogram' not found or updateHistogram not available.");
+            }
+            // Optionally initialize timechart visualization if runTimechart is true
+            if (window.runTimechart && typeof window.updateTimechartVisualization === 'function' && window.timechartData) {
+                window.updateTimechartVisualization(window.timechartData);
+            }
+        });
+
+        // Initial search to populate the grid and histogram
+        const start = moment().subtract(7, 'days');
+        const end = moment();
+        const initialData = {
+            searchText: "*",
+            startEpoch: start.valueOf(),
+            endEpoch: end.valueOf(),
+            runTimechart: false, // Default to false, no UI change unless explicitly set
+            queryLanguage: "Splunk QL"
+        };
+        if (typeof doSearch === 'function') {
+            doSearch(initialData);
+        }
     },
 };
 

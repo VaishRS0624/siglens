@@ -87,6 +87,10 @@ function doSearch(data) {
             $('#query-builder-btn').addClass('active');
 
             try {
+                const queryData = {
+                    ...data,
+                    state: 'RUNNING' // Add default state if required by backend
+                };
                 socket.send(JSON.stringify(data));
             } catch (e) {
                 reject(`Error sending message to server: ${e}`);
@@ -112,7 +116,29 @@ function doSearch(data) {
 
                     if (jsonEvent && jsonEvent.hits && jsonEvent.hits.totalMatched) {
                         totalHits = jsonEvent.hits.totalMatched;
+                        console.log("rendering total hits:", totalHits, ". elapsedTimeMS:", totalTime);
                         lastKnownHits = totalHits;
+
+                        // Update logsRowData with new records for histogram
+                        if (typeof logsRowData !== 'undefined' && typeof gridOptions !== 'undefined' && gridOptions.api) {
+                            logsRowData = jsonEvent.hits.records; // Original log records
+                            gridOptions.api.setRowData(logsRowData); // Update grid data
+
+                            // Optionally handle timechart data if runTimechart is true
+                            if (data.runTimechart && jsonEvent.TimechartUpdate) {
+                                window.timechartData = jsonEvent.TimechartUpdate; // Store timechart update data
+                                if (typeof window.updateHistogram === 'function') {
+                                    window.updateHistogram(logsRowData); // Update histogram with logs (default)
+                                }
+                                if (typeof window.updateTimechartVisualization === 'function') {
+                                    window.updateTimechartVisualization(window.timechartData); // Update timechart visualization
+                                }
+                            } else {
+                                if (typeof window.updateHistogram === 'function') {
+                                    window.updateHistogram(logsRowData);
+                                }
+                            }
+                        }
                     } else {
                         // we enter here only because backend sent null hits/totalmatched
                         totalHits = lastKnownHits;
@@ -133,6 +159,27 @@ function doSearch(data) {
                     console.time('COMPLETE');
                     canScrollMore = jsonEvent.can_scroll_more;
                     scrollFrom = jsonEvent.total_rrc_count;
+                    if (jsonEvent.hits && jsonEvent.hits.records) {
+                        // Update logsRowData with final records for histogram
+                        if (typeof logsRowData !== 'undefined' && typeof gridOptions !== 'undefined' && gridOptions.api) {
+                            logsRowData = jsonEvent.hits.records; // Final update
+                            gridOptions.api.setRowData(logsRowData);
+
+                            if (data.runTimechart && jsonEvent.TimechartComplete) {
+                                window.timechartData = jsonEvent.TimechartComplete; // Store timechart complete data
+                                if (typeof window.updateHistogram === 'function') {
+                                    window.updateHistogram(logsRowData); // Update histogram with logs
+                                }
+                                if (typeof window.updateTimechartVisualization === 'function') {
+                                    window.updateTimechartVisualization(window.timechartData); // Update timechart visualization
+                                }
+                            } else {
+                                if (typeof window.updateHistogram === 'function') {
+                                    window.updateHistogram(logsRowData);
+                                }
+                            }
+                        }
+                    }
                     processCompleteUpdate(jsonEvent, eventType, totalEventsSearched, timeToFirstByte, eqRel);
                     //eslint-disable-next-line no-undef
                     finalizeNullColumnsHiding();
@@ -181,6 +228,20 @@ function doSearch(data) {
             } else {
                 console.log(`Connection close not clean=${event} code=${event.code} reason=${event.reason} `);
                 errorMessages.push(`Connection close not clean=${event} code=${event.code} reason=${event.reason}`);
+                // Retry the search after 2 seconds, but limit retries to prevent infinite loops
+                let retryCount = 0;
+                const maxRetries = 5;
+                const retry = () => {
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        setTimeout(() => {
+                            doSearch(data).then(resolve).catch(reject);
+                        }, 2000 * retryCount); // Exponential backoff
+                    } else {
+                        reject(new Error(`Max retries (${maxRetries}) reached for WebSocket connection`));
+                    }
+                };
+                retry();
             }
 
             if (errorMessages.length === 0) {
@@ -193,9 +254,32 @@ function doSearch(data) {
             $('#hits-summary .final-res-time span').html(`${finalResultResponseTime}`);
         };
 
-        socket.addEventListener('error', (event) => {
-            errorMessages.push(`WebSocket error: ${event}`);
-        });
+        //socket.addEventListener('error', (event) => {
+        //    errorMessages.push(`WebSocket error: ${event}`);
+        //});
+        socket.onerror = function (error) {
+            console.error('WebSocket error:', error);
+            errorMessages.push(`WebSocket error: ${error}`);
+            $('#initial-response').text("WebSocket error: Unable to connect. Check backend server.");
+            // Retry with the same logic as onclose
+            let retryCount = 0;
+            const maxRetries = 5;
+            const retry = () => {
+                if (retryCount < maxRetries) {
+                    retryCount++;
+                    setTimeout(() => {
+                        socket.close();
+                        doSearch(data).then(resolve).catch(reject);
+                    }, 2000 * retryCount); // Exponential backoff
+                } else {
+                    reject(new Error(`Max retries (${maxRetries}) reached for WebSocket connection`));
+                }
+            };
+            retry();
+        };
+    }).catch(error => {
+        console.error('doSearch promise rejected:', error);
+        $('#initial-response').text(`Error: ${error.message || 'WebSocket connection failed'}`);
     });
 }
 
