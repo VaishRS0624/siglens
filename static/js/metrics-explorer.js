@@ -1579,6 +1579,42 @@ function initializeChart(canvas, seriesData, queryName, chartType) {
         };
     }
 
+    // Create crosshair plugin
+    const crosshairPlugin = {
+        id: 'crosshair',
+        beforeDraw: (chart, args, options) => {
+            if (!chart.crosshair) return;
+
+            const { ctx, chartArea: {top, bottom, left, right} } = chart;
+            const { x, y } = chart.crosshair;
+
+            if (x >= left && x <= right && y >= top && y <= bottom) {
+                // Save canvas state
+                ctx.save();
+
+                // Draw X line (vertical)
+                ctx.beginPath();
+                ctx.setLineDash([5, 5]); // Dashed line
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = 'rgba(102, 102, 102, 0.8)';
+                ctx.moveTo(x, top);
+                ctx.lineTo(x, bottom);
+                ctx.stroke();
+
+                // Draw Y line (horizontal)
+                ctx.beginPath();
+                ctx.setLineDash([5, 5]); // Dashed line
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = 'rgba(102, 102, 102, 0.9)';
+                ctx.moveTo(left, y);
+                ctx.lineTo(right, y);
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+    };
+
     var lineChart = new Chart(ctx, {
         type: chartType === 'Area chart' ? 'line' : chartType === 'Bar chart' ? 'bar' : 'line',
         data: chartData,
@@ -1596,12 +1632,23 @@ function initializeChart(canvas, seriesData, queryName, chartType) {
                     },
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    titleColor: '#333',
-                    bodyColor: '#333',
-                    borderColor: '#ddd',
+                    enabled: true,
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                    titleColor: 'white',
+                    bodyColor: 'white',
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
                     borderWidth: 1,
                     padding: 10,
+                    cornerRadius: 3,
+                    titleFont: {
+                        size: 13,
+                        weight: 'bold'
+                    },
+                    bodyFont: {
+                        size: 12
+                    },
                     callbacks: {
                         title: function(tooltipItems) {
                         const date = new Date(tooltipItems[0].parsed.x);
@@ -1615,37 +1662,15 @@ function initializeChart(canvas, seriesData, queryName, chartType) {
                         });
                         },
                         label: function(tooltipItem) {
-                        // Limit the label length if needed
+                        // Display shortened label for hover
                         const label = tooltipItem.dataset.label;
-                        const formattedLabel = label.length > 25 ? label.substring(0, 22) + '...' : label;
-                        return `${formattedLabel}: ${tooltipItem.formattedValue}`;
-                        },
-                        // Add this to create better spacing between items
-                        labelTextColor: function(context) {
-                        return context.dataset.borderColor;
-                        },
-                        labelPointStyle: function(context) {
-                        return {
-                            pointStyle: 'circle',
-                            rotation: 0
-                        };
+                        const shortenedLabel = label.length > 20 ? label.substring(0, 17) + '...' : label;
+                        return `${shortenedLabel}: ${tooltipItem.formattedValue}`;
                         }
-                    },
-                    titleFont: {
-                        weight: 'bold',
-                        size: 14
-                    },
-                    bodyFont: {
-                        size: 12
-                    },
-                    // Make the tooltip wider for better readability
-                    bodySpacing: 6,
-                    // Limit maximum width to prevent overly wide tooltips
-                    // while still allowing more readable multi-line content
-                    boxWidth: 10,
-                    boxHeight: 10
+                    }
                 },
                 ...annotationConfig,
+                crosshair: {}
             },
             scales: {
                 x: {
@@ -1714,8 +1739,227 @@ function initializeChart(canvas, seriesData, queryName, chartType) {
                 },
             },
             spanGaps: true,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            onHover: (event, activeElements, chart) => {
+                if (!event) return;
+
+                // Store mouse position for crosshair
+                chart.crosshair = {
+                    x: event.x,
+                    y: event.y
+                };
+
+                // Force redraw to show crosshair
+                chart.draw();
+            }
         },
+        plugins: [crosshairPlugin]
     });
+
+    // Add mouseout event listener to clear crosshair
+    canvas[0].addEventListener('mouseout', () => {
+        lineChart.crosshair = null;
+        lineChart.draw();
+    });
+
+    // Create custom tooltip element
+    // const tooltipEl = document.createElement('div');
+    // tooltipEl.style.opacity = 0;
+    // tooltipEl.style.position = 'absolute';
+    // tooltipEl.style.background = 'rgba(0, 0, 0, 0.7)';
+    // tooltipEl.style.color = 'white';
+    // tooltipEl.style.borderRadius = '3px';
+    // tooltipEl.style.pointerEvents = 'none';
+    // tooltipEl.style.padding = '10px';
+    // tooltipEl.style.transform = 'translate(-50%, 0)';
+    // tooltipEl.style.transition = 'all .1s ease';
+    // tooltipEl.style.zIndex = '99';
+    // tooltipEl.style.fontSize = '12px';
+    // tooltipEl.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+    // tooltipEl.style.minWidth = '150px';
+    // document.body.appendChild(tooltipEl);
+
+    // // Crosshair variables
+    // let crosshairVisible = false;
+    // let mouseX = 0;
+    // let mouseY = 0;
+    // let tooltipData = null;
+
+    // // Function to generate tooltip content
+    // function generateTooltipContent(chart, dataPoints) {
+    //     if (!dataPoints || !dataPoints.length) return '';
+
+    //     const date = new Date(dataPoints[0].parsed.x);
+    //     const formattedDate = date.toLocaleString('default', { month: 'short', day: 'numeric' }) + ', ' + date.toLocaleTimeString();
+
+    //     let html = `<div style="font-weight: bold; margin-bottom: 5px;">${formattedDate}</div>`;
+    //     html += '<div>';
+
+    //     dataPoints.forEach(point => {
+    //         const color = point.dataset.borderColor;
+    //         const label = point.dataset.label;
+    //         const value = point.formattedValue;
+
+    //         html += `
+    //             <div style="display: flex; align-items: center; margin: 3px 0;">
+    //                 <div style="width: 10px; height: 10px; background: ${color}; margin-right: 5px;"></div>
+    //                 <div style="flex-grow: 1;">${label}: <strong>${value}</strong></div>
+    //             </div>
+    //         `;
+    //     });
+
+    //     html += '</div>';
+    //     return html;
+    // }
+
+    // // Function to draw crosshair
+    // function drawCrosshair() {
+    //     if (!crosshairVisible) return;
+
+    //     const ctx = lineChart.ctx;
+    //     const { top, bottom, left, right } = lineChart.chartArea;
+
+    //     // Save canvas state
+    //     ctx.save();
+
+    //     // Draw X line (vertical)
+    //     ctx.beginPath();
+    //     ctx.setLineDash([5, 5]); // Dashed line
+    //     ctx.lineWidth = 1;
+    //     ctx.strokeStyle = 'rgba(102, 102, 102, 0.8)';
+    //     ctx.moveTo(mouseX, top);
+    //     ctx.lineTo(mouseX, bottom);
+    //     ctx.stroke();
+
+    //     // Draw Y line (horizontal) with stronger styling
+    //     ctx.beginPath();
+    //     ctx.setLineDash([5, 5]); // Dashed line
+    //     ctx.lineWidth = 1.5; // Slightly thicker for horizontal line
+    //     ctx.strokeStyle = 'rgba(102, 102, 102, 0.9)'; // Higher opacity for horizontal line
+    //     ctx.moveTo(left, mouseY);
+    //     ctx.lineTo(right, mouseY);
+    //     ctx.stroke();
+
+    //     ctx.restore();
+
+    //     // Update tooltip position and content if data is available
+    //     if (tooltipData && tooltipData.length) {
+    //         const canvasRect = canvas[0].getBoundingClientRect();
+    //         const tooltipX = canvasRect.left + mouseX;
+
+    //         // Position tooltip at cursor height, slightly above the cursor
+    //         const tooltipY = canvasRect.top + mouseY - 15;
+
+    //         tooltipEl.style.opacity = 1;
+    //         tooltipEl.style.left = tooltipX + 'px';
+    //         tooltipEl.style.top = tooltipY + 'px';
+    //         tooltipEl.innerHTML = generateTooltipContent(lineChart, tooltipData);
+
+    //         // Ensure tooltip stays within the viewport
+    //         const tooltipRect = tooltipEl.getBoundingClientRect();
+    //         if (tooltipRect.right > window.innerWidth) {
+    //             tooltipEl.style.left = (tooltipX - (tooltipRect.right - window.innerWidth)) + 'px';
+    //         }
+    //         if (tooltipRect.top < 0) {
+    //             tooltipEl.style.top = (canvasRect.top + mouseY + 15) + 'px';
+    //         }
+    //     } else {
+    //         tooltipEl.style.opacity = 0;
+    //     }
+    // }
+
+    // // Function to get data points at current mouse position
+    // function getTooltipData(chart, x) {
+    //     // Convert x coordinate to data value
+    //     const xValue = chart.scales.x.getValueForPixel(x);
+
+    //     // Find the closest data point for each dataset
+    //     const dataPoints = [];
+    //     chart.data.datasets.forEach((dataset, datasetIndex) => {
+    //         // Skip if dataset is hidden
+    //         if (chart.getDatasetMeta(datasetIndex).hidden) return;
+
+    //         let closestPoint = null;
+    //         let minDistance = Infinity;
+
+    //         // Look through all data points in this dataset
+    //         for (let i = 0; i < dataset.data.length; i++) {
+    //             const dataPoint = dataset.data[i];
+    //             if (!dataPoint || dataPoint.x === undefined) continue;
+
+    //             const distance = Math.abs(new Date(dataPoint.x) - xValue);
+    //             if (distance < minDistance) {
+    //                 minDistance = distance;
+    //                 closestPoint = {
+    //                     datasetIndex,
+    //                     index: i,
+    //                     parsed: {
+    //                         x: dataPoint.x,
+    //                         y: dataPoint.y
+    //                     },
+    //                     dataset: dataset,
+    //                     formattedValue: typeof dataPoint.y === 'number' ? dataPoint.y.toFixed(1) : dataPoint.y
+    //                 };
+    //             }
+    //         }
+
+    //         if (closestPoint) {
+    //             dataPoints.push(closestPoint);
+    //         }
+    //     });
+
+    //     return dataPoints;
+    // }
+
+    // // Add mousemove event listener
+    // canvas[0].addEventListener('mousemove', (event) => {
+    //     const rect = canvas[0].getBoundingClientRect();
+    //     mouseX = event.clientX - rect.left;
+    //     mouseY = event.clientY - rect.top;
+
+    //     // Check if mouse is within chart area
+    //     const { top, bottom, left, right } = lineChart.chartArea;
+    //     if (mouseX >= left && mouseX <= right && mouseY >= top && mouseY <= bottom) {
+    //         crosshairVisible = true;
+
+    //         // Get tooltip data at current mouse position
+    //         tooltipData = getTooltipData(lineChart, mouseX);
+
+    //         // Request animation frame to redraw crosshair and tooltip
+    //         requestAnimationFrame(() => {
+    //             // We need to redraw the chart first
+    //             lineChart.draw();
+    //             // Then draw our crosshair and update tooltip
+    //             drawCrosshair();
+    //         });
+    //     } else {
+    //         crosshairVisible = false;
+    //         tooltipEl.style.opacity = 0;
+    //         // Redraw the chart without crosshair when mouse leaves chart area
+    //         lineChart.draw();
+    //     }
+    // });
+
+    // // Add mouseout event listener
+    // canvas[0].addEventListener('mouseout', () => {
+    //     crosshairVisible = false;
+    //     tooltipEl.style.opacity = 0;
+    //     // Redraw the chart without crosshair
+    //     lineChart.draw();
+    // });
+
+    // // Add mouseover event listener to ensure tooltip is visible when re-entering chart
+    // canvas[0].addEventListener('mouseover', (event) => {
+    //     // Trigger the same logic as mousemove
+    //     const event2 = new MouseEvent('mousemove', {
+    //         clientX: event.clientX,
+    //         clientY: event.clientY
+    //     });
+    //     canvas[0].dispatchEvent(event2);
+    // });
 
     // Update threshold line if threshold value or condition is changed
     if (isAlertScreen) {
