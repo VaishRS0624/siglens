@@ -53,11 +53,6 @@ var colorPalette = {
     Palette: ['#5596c8', '#9c86cd', '#f9d038', '#66bfa1', '#c160c9', '#dd905a', '#4476c9', '#c5d741', '#9246b7', '#65d1d5', '#7975da', '#659d33', '#cf777e', '#f2ba46', '#59baee', '#cd92d8', '#508260', '#cf5081', '#a65c93', '#b0be4f'],
 };
 
-let cachedMetrics = [];
-let isLoadingMore = false;
-const ITEMS_PER_PAGE = 20;
-let currentSearchTerm = '';
-
 // Function to check if CSV can be downloaded
 function canDownloadCSV() {
     for (let key in chartDataCollection) {
@@ -98,6 +93,7 @@ function updateDownloadButtons() {
 $(document).ready(async function () {
     updateDownloadButtons();
     setupEventHandlers();
+
     var currentPage = window.location.pathname;
     if (currentPage.startsWith('/alert.html') || currentPage === '/alert-details.html') {
         isAlertScreen = true;
@@ -119,7 +115,6 @@ $(document).ready(async function () {
 
     $('.theme-btn').on('click', themePickerHandler);
     $('.theme-btn').on('click', updateChartColorsBasedOnTheme);
-
     allFunctions = await getFunctions();
     functionsArray = allFunctions.map(function (item) {
         return item.fn;
@@ -151,6 +146,8 @@ $(document).ready(async function () {
     createTooltip('#run-filter-btn', 'Run query');
     createTooltip('.download-all-logs-btn', 'Download');
     createTooltip('.refresh-btn', 'Refresh');
+
+    // setupChartsAndPlugins();
 });
 
 function getUrlParameter(name) {
@@ -1023,72 +1020,31 @@ async function initializeAutocomplete(queryElement, previousQuery = {}) {
     queryElement
         .find('.metrics')
         .autocomplete({
-            delay: 300,
+            source: availableMetrics.sort(),
             minLength: 0,
-            classes: {
-                'ui-autocomplete': 'metrics-ui-widget',
-            },
-            source: function (request, response) {
-                const input = $(this);
-                const searchTerm = request.term.toLowerCase();
-                currentSearchTerm = request.term.toLowerCase();
-
-                input.data('current-filter', currentSearchTerm);
-
-                setTimeout(function () {
-                    const matches = cachedMetrics.filter((item) => item.toLowerCase().indexOf(searchTerm) >= 0).slice(0, ITEMS_PER_PAGE);
-                    response(matches);
-                }, 0);
-            },
             select: async function (event, ui) {
                 queryDetails.metrics = ui.item.value;
                 getQueryDetails(queryName, queryDetails);
-
                 const tagsAndValue = await getTagKeyValue(ui.item.value);
                 availableEverything = tagsAndValue.availableEverything[0];
                 availableEverywhere = tagsAndValue.availableEverywhere;
                 queryElement.find('.everywhere').autocomplete('option', 'source', availableEverywhere);
                 queryElement.find('.everything').autocomplete('option', 'source', availableEverything);
-
                 $(this).blur();
-                setTimeout(() => {
-                    adjustInputWidth(this);
-                }, 10);
+                adjustInputWidth(this);
             },
-            open: function () {
-                const menu = $(this).autocomplete('widget');
-                const input = $(this);
-
-                menu.css({
-                    'max-height': '300px',
-                    'overflow-y': 'auto',
-                    'overflow-x': 'hidden',
-                });
-
-                menu.off('scroll.metrics').on('scroll.metrics', function () {
-                    if (isLoadingMore) return;
-
-                    const scrollBottom = $(this).scrollTop() + $(this).innerHeight();
-                    const scrollHeight = this.scrollHeight;
-                    if (scrollBottom >= scrollHeight - 50) {
-                        loadMoreItems(menu, input);
-                    }
-                });
+            classes: {
+                'ui-autocomplete': 'metrics-ui-widget',
             },
         })
-        .on('click', function (e) {
-            e.stopPropagation();
-            const $this = $(this);
-
-            if ($this.autocomplete('widget').is(':visible')) {
-                $this.autocomplete('close');
+        .on('click', function () {
+            if ($(this).autocomplete('widget').is(':visible')) {
+                $(this).autocomplete('close');
             } else {
-                $this.autocomplete('search', '');
-                currentSearchTerm = '';
-                $this.focus();
+                $(this).autocomplete('search', '');
             }
         })
-        .on('focus', function () {
+        .on('click', function () {
             $(this).select();
         })
         .on('close', function (_event) {
@@ -1417,56 +1373,86 @@ async function initializeAutocomplete(queryElement, previousQuery = {}) {
     previousQuery = queryDetails;
 }
 
-function loadMoreItems(menu, input) {
-    if (isLoadingMore) return;
-    isLoadingMore = true;
-
-    const currentCount = menu.find('li').length;
-    const term = currentSearchTerm || '';
-    const nextBatch = cachedMetrics.filter((item) => item.toLowerCase().indexOf(term) >= 0).slice(currentCount, currentCount + ITEMS_PER_PAGE);
-
-    if (nextBatch.length > 0) {
-        const fragment = document.createDocumentFragment();
-
-        nextBatch.forEach((item) => {
-            const li = document.createElement('li');
-            li.className = 'ui-menu-item';
-
-            const div = document.createElement('div');
-            div.className = 'ui-menu-item-wrapper';
-            div.textContent = item;
-
-            li.appendChild(div);
-            fragment.appendChild(li);
-
-            $(li).data('ui-autocomplete-item', {
-                label: item,
-                value: item,
-            });
-        });
-
-        menu.append(fragment);
-
-        menu.off('mousedown.loadmore').on('mousedown.loadmore', '.ui-menu-item-wrapper', function () {
-            const value = $(this).text();
-
-            input.val(value);
-            input.autocomplete('instance')._trigger('select', 'autocompleteselect', {
-                item: { label: value, value: value },
-            });
-
-            input.autocomplete('close');
-            return false;
-        });
-    }
-
-    isLoadingMore = false;
-}
-
 function updateCloseIconVisibility() {
     var numQueries = $('#metrics-queries').children('.metrics-query').length;
     $('.metrics-query .remove-query').toggle(numQueries > 1);
 }
+
+// Crosshair plugin for Chart.js
+// Improved Crosshair plugin for Chart.js
+const crosshairPlugin = {
+    id: 'crosshair',
+    beforeDraw: function(chart) {
+
+        console.log("Crosshair plugin running");
+
+        if (chart.tooltip._active && chart.tooltip._active.length) {
+            console.log("Active tooltip found", chart.tooltip._active);
+
+            const activePoint = chart.tooltip._active[0];
+            console.log("Active point:", activePoint);
+
+            // Check if element exists and has coordinates
+            if (!activePoint.element) {
+                console.log("No element property found on active point");
+                return;
+            }
+
+            if (typeof activePoint.element.x === 'undefined' || typeof activePoint.element.y === 'undefined') {
+                console.log("Missing coordinates:", activePoint.element);
+                return;
+            }
+
+            console.log("Drawing crosshair at:", activePoint.element.x, activePoint.element.y);
+
+            const ctx = chart.ctx;
+            const x = activePoint.element.x;
+            const y = activePoint.element.y;
+            const topY = chart.scales.y.top;
+            const bottomY = chart.scales.y.bottom;
+            const leftX = chart.scales.x.left;
+            const rightX = chart.scales.x.right;
+
+            // Save state
+            ctx.save();
+
+            // Draw vertical line
+            ctx.beginPath();
+            ctx.moveTo(x, topY);
+            ctx.lineTo(x, bottomY);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.setLineDash([5, 5]);
+            ctx.stroke();
+
+            // Draw horizontal line (with explicit stroke command)
+            ctx.beginPath();
+            ctx.moveTo(leftX, y);
+            ctx.lineTo(rightX, y);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.setLineDash([5, 5]);
+            ctx.stroke();
+
+            // Optionally, add intersection point
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.fill();
+
+            // Restore state
+            ctx.restore();
+
+            console.log("Crosshair drawing completed");
+        } else {
+            console.log("No active tooltip found");
+        }
+    }
+};
+
+// if (!Chart.registry.plugins.get('crosshair')) {
+//     Chart.register(crosshairPlugin);
+// }
 
 function prepareChartData(seriesData, chartDataCollection, queryName) {
     var labels = [];
@@ -1503,6 +1489,16 @@ function prepareChartData(seriesData, chartDataCollection, queryName) {
 
     return chartData;
 }
+
+
+// function initChartPlugins() {
+//     // Register the ChartCrosshair plugin
+//     Chart.register(ChartCrosshair);
+//     console.log('ChartCrosshair plugin registered');
+// }
+
+Chart.register(crosshairPlugin);
+
 function initializeChart(canvas, seriesData, queryName, chartType) {
     var ctx = canvas[0].getContext('2d');
     let chartData = prepareChartData(seriesData, chartDataCollection, queryName);
@@ -1579,6 +1575,8 @@ function initializeChart(canvas, seriesData, queryName, chartType) {
         };
     }
 
+    // Chart.register(crosshairPlugin);
+
     var lineChart = new Chart(ctx, {
         type: chartType === 'Area chart' ? 'line' : chartType === 'Bar chart' ? 'bar' : 'line',
         data: chartData,
@@ -1586,6 +1584,40 @@ function initializeChart(canvas, seriesData, queryName, chartType) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
+                crosshair: {
+                    line: {
+                        color: 'rgba(200, 200, 200, 0.8)',
+                        width: 1,
+                        dashPattern: [5, 5],
+                    },
+                    x: {
+                        enabled: true,
+                        line: {
+                            color: 'rgba(200, 200, 200, 0.8)',
+                            width: 1,
+                            dashPattern: [5, 5],
+                        },
+                    },
+                    y: {
+                        enabled: true,
+                        line: {
+                            color: 'rgba(200, 200, 200, 0.8)',
+                            width: 1,
+                            dashPattern: [5, 5],
+                        },
+                    },
+                    sync: {
+                        enabled: true,
+                        group: 1,
+                        suppressTooltips: false,
+                    },
+                    snap: {
+                        enabled: true
+                    },
+                    zoom: {
+                        enabled: false,
+                    },
+                },
                 legend: {
                     position: 'bottom',
                     align: 'start',
@@ -1596,56 +1628,23 @@ function initializeChart(canvas, seriesData, queryName, chartType) {
                     },
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    titleColor: '#333',
-                    bodyColor: '#333',
-                    borderColor: '#ddd',
-                    borderWidth: 1,
-                    padding: 10,
+                    enabled: true,
+                    position: 'nearest',
+                    mode: 'index',                  // Use interpolate for precise positioning
+                    intersect: false,
                     callbacks: {
-                        title: function(tooltipItems) {
-                        const date = new Date(tooltipItems[0].parsed.x);
-                        return date.toLocaleString('default', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit'
-                        });
+                        title: function (tooltipItems) {
+                            const date = new Date(tooltipItems[0].parsed.x);
+                            const formattedDate = date.toLocaleString('default', { month: 'short', day: 'numeric' }) + ', ' + date.toLocaleTimeString();
+                            return formattedDate;
                         },
-                        label: function(tooltipItem) {
-                        // Limit the label length if needed
-                        const label = tooltipItem.dataset.label;
-                        const formattedLabel = label.length > 25 ? label.substring(0, 22) + '...' : label;
-                        return `${formattedLabel}: ${tooltipItem.formattedValue}`;
+                        label: function (tooltipItem) {
+                            return `${tooltipItem.dataset.label}: ${tooltipItem.formattedValue}`;
                         },
-                        // Add this to create better spacing between items
-                        labelTextColor: function(context) {
-                        return context.dataset.borderColor;
-                        },
-                        labelPointStyle: function(context) {
-                        return {
-                            pointStyle: 'circle',
-                            rotation: 0
-                        };
-                        }
                     },
-                    titleFont: {
-                        weight: 'bold',
-                        size: 14
-                    },
-                    bodyFont: {
-                        size: 12
-                    },
-                    // Make the tooltip wider for better readability
-                    bodySpacing: 6,
-                    // Limit maximum width to prevent overly wide tooltips
-                    // while still allowing more readable multi-line content
-                    boxWidth: 10,
-                    boxHeight: 10
                 },
                 ...annotationConfig,
+
             },
             scales: {
                 x: {
@@ -1714,6 +1713,15 @@ function initializeChart(canvas, seriesData, queryName, chartType) {
                 },
             },
             spanGaps: true,
+            // These options improve crosshair interaction
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            hover: {
+                mode: 'index',
+                intersect: false,
+            },
         },
     });
 
@@ -2262,6 +2270,10 @@ function mergeGraphs(chartType, panelId = -1) {
     }
     $('.merged-graph-name').html(graphNames.join(', '));
     const { gridLineColor, tickColor } = getGraphGridColors();
+
+    // Register the crosshair plugin before creating the chart
+    // Chart.register(crosshairPlugin);
+
     var mergedLineChart = new Chart(mergedCtx, {
         type: chartType === 'Area chart' ? 'line' : chartType === 'Bar chart' ? 'bar' : 'line',
         data: mergedData,
@@ -2269,6 +2281,41 @@ function mergeGraphs(chartType, panelId = -1) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
+                // Crosshair plugin configuration
+                crosshair: {
+                    line: {
+                        color: 'rgba(200, 200, 200, 0.8)',
+                        width: 1,
+                        dashPattern: [5, 5],
+                    },
+                    x: {
+                        enabled: true,
+                        line: {
+                            color: 'rgba(200, 200, 200, 0.8)',
+                            width: 1,
+                            dashPattern: [5, 5],
+                        },
+                    },
+                    y: {
+                        enabled: true,
+                        line: {
+                            color: 'rgba(200, 200, 200, 0.8)',
+                            width: 1,
+                            dashPattern: [5, 5],
+                        },
+                    },
+                    sync: {
+                        enabled: true,
+                        group: 1,
+                        suppressTooltips: false
+                    },
+                    snap: {
+                        enabled: true
+                    },
+                    zoom: {
+                        enabled: false
+                    },
+                },
                 legend: {
                     display: shouldShowLegend(panelId, mergedData.datasets),
                     position: 'bottom',
@@ -2280,54 +2327,22 @@ function mergeGraphs(chartType, panelId = -1) {
                     },
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    titleColor: '#333',
-                    bodyColor: '#333',
-                    borderColor: '#ddd',
-                    borderWidth: 1,
-                    padding: 10,
+                    enabled: true,
+                    position: 'nearest',
+                    mode: 'index',
+                    intersect: false,
                     callbacks: {
-                        title: function(tooltipItems) {
-                        const date = new Date(tooltipItems[0].parsed.x);
-                        return date.toLocaleString('default', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit'
-                        });
+                        title: function (tooltipItems) {
+                            // Display formatted timestamp in the title
+                            const date = new Date(tooltipItems[0].parsed.x);
+                            const formattedDate = date.toLocaleString('default', { month: 'short', day: 'numeric' }) + ', ' + date.toLocaleTimeString();
+                            return formattedDate;
                         },
-                        label: function(tooltipItem) {
-                        // Limit the label length if needed
-                        const label = tooltipItem.dataset.label;
-                        const formattedLabel = label.length > 25 ? label.substring(0, 22) + '...' : label;
-                        return `${formattedLabel}: ${tooltipItem.formattedValue}`;
+                        label: function (tooltipItem) {
+                            // Display dataset label and value
+                            return `${tooltipItem.dataset.label}: ${tooltipItem.formattedValue}`;
                         },
-                        // Add this to create better spacing between items
-                        labelTextColor: function(context) {
-                        return context.dataset.borderColor;
-                        },
-                        labelPointStyle: function(context) {
-                        return {
-                            pointStyle: 'circle',
-                            rotation: 0
-                        };
-                        }
                     },
-                    titleFont: {
-                        weight: 'bold',
-                        size: 14
-                    },
-                    bodyFont: {
-                        size: 12
-                    },
-                    // Make the tooltip wider for better readability
-                    bodySpacing: 6,
-                    // Limit maximum width to prevent overly wide tooltips
-                    // while still allowing more readable multi-line content
-                    boxWidth: 10,
-                    boxHeight: 10
                 },
             },
             scales: {
@@ -2380,11 +2395,25 @@ function mergeGraphs(chartType, panelId = -1) {
                 },
             },
             spanGaps: true,
+            //improve crosshair interaction
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            hover: {
+                mode: 'index',
+                intersect: false,
+            },
         },
     });
+
     mergedGraph = mergedLineChart;
     updateDownloadButtons();
 }
+
+// function setupChartsAndPlugins() {
+//     initChartPlugins();
+// }
 
 const shouldShowLegend = (panelId, datasets) => {
     if ($('#overview-button').hasClass('active')) {
@@ -2501,7 +2530,6 @@ async function getMetricNames() {
             start: filterStartDate,
             end: filterEndDate,
         };
-
         const res = await $.ajax({
             method: 'post',
             url: 'metrics-explorer/api/v1/metric_names',
@@ -2515,10 +2543,7 @@ async function getMetricNames() {
         });
 
         if (res) {
-            availableMetrics = res.metricNames.sort();
-            cachedMetrics = res.metricNames.slice();
-
-            isLoadingMore = false;
+            availableMetrics = res.metricNames;
         }
 
         return res;
@@ -2912,10 +2937,10 @@ async function getFunctions() {
 async function refreshMetricsGraphs() {
     dayCnt7 = 0;
     dayCnt2 = 0;
-    await getMetricNames();
+    const newMetricNames = await getMetricNames();
+    newMetricNames.metricNames.sort();
 
-    isLoadingMore = false;
-
+    $('.metrics').autocomplete('option', 'source', newMetricNames.metricNames);
     const firstKey = Object.keys(queries)[0];
 
     if (queries[firstKey].metrics || queries[firstKey].state === 'raw') {
