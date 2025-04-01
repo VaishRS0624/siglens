@@ -65,7 +65,6 @@ const MetricsUtils = {
                 },
             ],
             formulas: [],
-            type: 'Instant', // Indicate instant query type
         };
 
         const transformedMetricsQueryParams = JSON.stringify(metricsQueryParamsData);

@@ -42,7 +42,6 @@ let funcApplied = false;
 let selectedTheme = 'Palette';
 let selectedLineStyle = 'Solid';
 let selectedStroke = 'Normal';
-let selectedQueryType = 'Both';
 var colorPalette = {
     Classic: ['#a3cafd', '#5795e4', '#d7c3fa', '#7462d8', '#f7d048', '#fbf09e'],
     Purple: ['#dbcdfa', '#c8b3fb', '#a082fa', '#8862eb', '#764cd8', '#5f36ac', '#27064c'],
@@ -133,19 +132,7 @@ $(document).ready(async function () {
         let jsonString = decodeURIComponent(dataParam);
         let obj = JSON.parse(jsonString);
         isMetricsURL = true;
-
-        if (obj.type) {
-            selectedQueryType = obj.type; // e.g., "Instant" from Kubernetes
-            $('#query-type-input').val(selectedQueryType);
-        }
-        // Populate metrics query element and set initial time range
         populateMetricsQueryElement(obj);
-        filterStartDate = obj.start; // Could be "now-1h" or timestamp
-        filterEndDate = obj.end;
-
-        // Trigger initial query execution with the parsed query
-        const initialQuery = obj.queries[0];
-        getMetricsData(initialQuery.name, initialQuery.query, initialQuery.state);
     }
 
     if (!isAlertScreen && !isMetricsURL && !isDashboardScreen) {
@@ -2145,29 +2132,6 @@ $('#stroke-input')
         $(this).select();
     });
 
-var queryTypeOptions = ['Both', 'Range', 'Instant'];
-
-$('#query-type-input')
-    .autocomplete({
-        source: queryTypeOptions,
-        minLength: 0,
-        select: function(event, ui) {
-            handleQueryTypeChange(ui.item.value);
-            $(this).blur();
-        }
-    })
-    .on('click', function() {
-        if ($(this).autocomplete('widget').is(':visible')) {
-            $(this).autocomplete('close');
-        } else {
-            $(this).autocomplete('search', '');
-        }
-    })
-    .on('click', function() {
-        $(this).select();
-    })
-    .val(selectedQueryType);
-
 // Function to update all line charts based on selected line style and stroke
 function updateLineCharts(lineStyle, stroke) {
     selectedLineStyle = lineStyle;
@@ -2517,42 +2481,7 @@ function mergeGraphs(chartType, panelId = -1) {
 async function convertDataForChart(data) {
     let seriesArray = [];
 
-    if (data.queryType === 'Instant') {
-        // Handle Prometheus instant query response
-        if (data.status === 'success' && data.data) {
-            const { resultType, result } = data.data;
-
-            if (resultType === 'vector') {
-                result.forEach((item) => {
-                    const seriesName = item.metric.__name__ || 'Instant Query';
-                    const timestamp = item.value[0] * 1000; // Convert to milliseconds
-                    const value = parseFloat(item.value[1]);
-                    const formattedDate = moment(timestamp).format('YYYY-MM-DDTHH:mm:ss');
-
-                    seriesArray.push({
-                        seriesName: seriesName + ' ' + JSON.stringify(item.metric),
-                        values: { [formattedDate]: value },
-                    });
-                });
-            } else if (resultType === 'scalar') {
-                const timestamp = filterEndDate && typeof filterEndDate === 'number' ? filterEndDate : Date.now() / 1000;
-                const formattedDate = moment(timestamp * 1000).format('YYYY-MM-DDTHH:mm:ss');
-                seriesArray.push({
-                    seriesName: 'Scalar Result',
-                    values: { [formattedDate]: parseFloat(result[1]) },
-                });
-            }
-
-            if (seriesArray.length === 0) {
-                const timestamp = filterEndDate && typeof filterEndDate === 'number' ? filterEndDate : Date.now() / 1000;
-                const formattedDate = moment(timestamp * 1000).format('YYYY-MM-DDTHH:mm:ss');
-                seriesArray.push({
-                    seriesName: 'No Data',
-                    values: { [formattedDate]: null },
-                });
-            }
-        }
-    } else if (data.series && data.timestamps && data.values) {
+    if (data.series && data.timestamps && data.values) {
         let chartStartTime, chartEndTime;
 
         // If using custom date range
@@ -2617,11 +2546,11 @@ async function convertDataForChart(data) {
             startTime = Math.floor(filterStartDate / 1000);
             endTime = Math.floor(filterEndDate / 1000);
         } else {
-            startTime = data.startTime || (Date.now() / 1000 - 3600); // Default to 1h ago
+            startTime = data.startTime;
             endTime = Math.floor(Date.now() / 1000);
         }
 
-        const labels = generateEmptyChartLabels(timeUnit || 'minute', startTime, endTime);
+        const labels = generateEmptyChartLabels(timeUnit, startTime, endTime);
         seriesArray.push({
             seriesName: 'No Data',
             values: labels.reduce((acc, label) => {
@@ -2756,63 +2685,40 @@ function handleErrorAndCleanup(container, mergedContainer, panelEditContainer, q
     return errorMessage;
 }
 
+async function getMetricsData(queryName, metricName, state) {
+    // Show loading indicators
+    const container = $('#metrics-graphs').find(`.metrics-graph[data-query="${queryName}"] .graph-canvas`);
+    const mergedContainer = $('#merged-graph-container').find('.merged-graph');
 
-    async function getMetricsData(queryName, metricName, state) {
-        // Show loading indicators
-        const container = $('#metrics-graphs').find(`.metrics-graph[data-query="${queryName}"] .graph-canvas`);
-        const mergedContainer = $('#merged-graph-container').find('.merged-graph');
+    mergedContainer.append('<div id="panel-loading"></div>');
+    container.append('<div id="panel-loading"></div>');
 
-        mergedContainer.append('<div id="panel-loading"></div>');
-        container.append('<div id="panel-loading"></div>');
-
-        let panelEditContainer;
-        if (isDashboardScreen) {
-            panelEditContainer = $('.panelDisplay').find('#panEdit-panel');
-            panelEditContainer.append('<div id="panel-loading"></div>');
-        }
-
-        // Prepare query object
-        const query = { name: queryName, query: `${metricName}`, qlType: 'promql', state };
-        let result;
-
-        if (selectedQueryType === 'Instant') {
-            // Instant query using /promql/api/v1/query
-            const timestamp = (typeof filterEndDate === 'number' ? filterEndDate : 'now');
-            const queryString = createSingleQueryString([query], [{ formula: queryName }]);
-            try {
-                result = await executePromQLQuery(queryString, timestamp);
-                result.queryType = 'Instant';
-            } catch (error) {
-                const errorMessage = handleErrorAndCleanup(container, mergedContainer, panelEditContainer, queryName, error, isDashboardScreen);
-                displayErrorMessage(container.closest('.metrics-graph'), errorMessage);
-                throw error;
-            }
-        } else {
-            // Range query using metrics-explorer/api/v1/timeseries
-            const data = {
-                start: filterStartDate ? filterStartDate : 'now-1h',
-                end: filterEndDate ? filterEndDate : 'now',
-                queries: [query],
-                formulas: [{ formula: queryName }],
-            };
-            try {
-                result = await fetchTimeSeriesData(data);
-                result.queryType = selectedQueryType;
-            } catch (error) {
-                const errorMessage = handleErrorAndCleanup(container, mergedContainer, panelEditContainer, queryName, error, isDashboardScreen);
-                displayErrorMessage(container.closest('.metrics-graph'), errorMessage);
-                throw error;
-            }
-        }
-
-        // Update global state if successful
-        rawTimeSeriesData = result;
-        updateDownloadButtons();
-        updateMetricsQueryParamsInUrl();
-        metricsQueryParams = { queries: [query], formulas: [{ formula: queryName }] };
-
-        return result;
+    let panelEditContainer;
+    if (isDashboardScreen) {
+        panelEditContainer = $('.panelDisplay').find('#panEdit-panel');
+        panelEditContainer.append('<div id="panel-loading"></div>');
     }
+
+    // Prepare data for the API call
+    const query = { name: queryName, query: `${metricName}`, qlType: 'promql', state };
+    const data = {
+        start: filterStartDate,
+        end: filterEndDate,
+        queries: [query],
+        formulas: [{ formula: queryName }],
+    };
+
+    // Return the result to be handled by the caller
+    const result = await fetchTimeSeriesData(data);
+
+    // Update global state if successful
+    rawTimeSeriesData = result;
+    updateDownloadButtons();
+    updateMetricsQueryParamsInUrl();
+    metricsQueryParams = data; // For alerts page
+
+    return result;
+}
 
 async function getMetricsDataForFormula(formulaId, formulaDetails) {
     let queriesData = [];
@@ -2920,23 +2826,6 @@ async function fetchTimeSeriesData(data) {
         // Reset cursor to default
         $('body').css('cursor', 'default');
     }
-}
-
-// Import executePromQLQuery for instant queries
-async function executePromQLQuery(query, timestamp) {
-    return await $.ajax({
-        url: '/promql/api/v1/query',
-        type: 'GET',
-        data: {
-            time: timestamp,
-            query: query,
-        },
-        headers: {
-            Accept: '*/*',
-        },
-        crossDomain: true,
-        dataType: 'json',
-    });
 }
 
 function getTagKeyValue(metricName) {
@@ -3090,32 +2979,6 @@ function createQueryString(queryObject) {
     return queryString;
 }
 
-function createSingleQueryString(queries, formulas) {
-    let queryString = '';
-
-    if (queries && queries.length > 0) {
-        const baseQuery = queries[0].state === 'builder'
-            ? createQueryString(queries[0])
-            : queries[0].query;
-        queryString = baseQuery;
-
-        if (queries.length > 1) {
-            console.warn('Multiple queries detected; only the first will be used for instant query');
-        }
-    }
-
-    if (formulas && formulas.length > 0) {
-        let formulaString = formulas[0].formula;
-        queries.forEach(q => {
-            formulaString = formulaString.replace(new RegExp(`\\b${q.name}\\b`, 'g'),
-                q.state === 'builder' ? createQueryString(q) : q.query);
-        });
-        queryString = formulaString;
-    }
-
-    return queryString;
-}
-
 async function getFunctions() {
     const res = await $.ajax({
         method: 'get',
@@ -3128,26 +2991,6 @@ async function getFunctions() {
         dataType: 'json',
     });
     if (res) return res;
-}
-
-// Handle query type change
-function handleQueryTypeChange(queryType) {
-    selectedQueryType = queryType;
-    refreshAllQueries();
-}
-
-// Refresh all queries when type changes
-async function refreshAllQueries() {
-    for (let queryName in queries) {
-        if (Object.prototype.hasOwnProperty.call(queries, queryName)) {
-            await getMetricsData(queryName, queries[queryName].query, queries[queryName].state);
-        }
-    }
-    for (let formulaId in formulas) {
-        if (Object.prototype.hasOwnProperty.call(formulas, formulaId)) {
-            await getMetricsDataForFormula(formulaId, formulas[formulaId]);
-        }
-    }
 }
 
 async function refreshMetricsGraphs() {
