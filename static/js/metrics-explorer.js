@@ -1902,6 +1902,7 @@ function getOrCreateVisualizationContainer(queryName, queryString) {
 
 function addVisualizationContainer(queryName, seriesData, queryString, panelId) {
     if (isDashboardScreen) {
+        console.log('Dashboard screen:', isDashboardScreen)
         // For dashboard page
         prepareChartData(seriesData, chartDataCollection, queryName);
         mergeGraphs(chartType, panelId);

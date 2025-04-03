@@ -1277,7 +1277,9 @@ async function runQueryBtnHandler() {
 
     // reset the current panel's queryRes attribute
     delete currentPanel.queryRes;
+    console.log('Before reset:', $('.panelDisplay').html());
     resetEditPanel();
+    console.log('After reset:', $('.panelDisplay').html());
     panelGridDiv = null;
     panelLogsRowData = [];
     $('.panelDisplay .ag-root-wrapper').remove();
@@ -1292,6 +1294,8 @@ async function runQueryBtnHandler() {
     if (currentPanel.queryType == 'metrics') {
         data = currentPanel.queryData;
         runMetricsQuery(data, -1, currentPanel);
+        console.log(currentPanel);
+
     } else if (currentPanel.queryType == 'logs') {
         //eslint-disable-next-line no-undef
         resetPanelLogsColumnDefs();

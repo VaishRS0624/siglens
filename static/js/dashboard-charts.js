@@ -386,6 +386,7 @@ function findSmallestGreaterOne(number) {
 //eslint-disable-next-line no-unused-vars
 function displayBigNumber(value, panelId, dataType, panelIndex) {
     console.log('displayBigNumber called');
+    console.log('Displaying:', value)
     if (panelId === -1) {
         $('.panelDisplay .panEdit-panel').hide();
         $(`.panelDisplay .big-number-display-container`).show();
