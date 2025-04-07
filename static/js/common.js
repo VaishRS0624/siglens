@@ -590,6 +590,8 @@ async function runMetricsQuery(data, panelId, currentPanel, _queryRes) {
         $(`#panel${panelId} #empty-response`).hide();
         $(`#panel${panelId} .panEdit-panel`).show();
     }
+    console.log('runMetricsQuery called with:', { panelId, chartType: currentPanel.chartType, queryData: data });
+
     var chartType = currentPanel.chartType;
     if (chartType === 'number') {
         let bigNumVal = null;
@@ -611,6 +613,7 @@ async function runMetricsQuery(data, panelId, currentPanel, _queryRes) {
         if (bigNumVal === undefined || bigNumVal === null) {
             panelProcessEmptyQueryResults('', panelId);
         } else {
+            console.log('Big Number Value:', bigNumVal)
             displayBigNumber(bigNumVal.toString(), panelId, dataType, panelIndex);
             allResultsDisplayed--;
             if (allResultsDisplayed <= 0 || panelId === -1) {

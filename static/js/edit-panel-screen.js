@@ -1430,4 +1430,7 @@ function displayPanelView(panelIndex) {
             runPanelAggsQuery(localPanel.queryData, localPanel.panelId, localPanel.chartType, localPanel.dataType, localPanel.panelIndex);
             break;
     }
+
+    console.log('displayPanels called, refreshing all panels');
+    localPanels.forEach((panel, index) => displayPanelView(index));
 }
