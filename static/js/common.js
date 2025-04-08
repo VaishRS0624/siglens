@@ -596,7 +596,7 @@ async function runMetricsQuery(data, panelId, currentPanel, _queryRes) {
     if (chartType === 'number') {
         let bigNumVal = null;
         let dataType = currentPanel.dataType;
-        let rawTimeSeriesData;
+
         for (const queryData of data.queriesData) {
             $('metrics-queries').empty();
             rawTimeSeriesData = await fetchTimeSeriesData(queryData);

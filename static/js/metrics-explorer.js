@@ -2276,7 +2276,7 @@ function mergeGraphs(chartType, panelId = -1) {
         const data = getMetricsQData();
         currentPanel.queryData = data;
         const panelChartEl = panelId === -1 ? $(`.panelDisplay .panEdit-panel`) : $(`#panel${panelId} .panEdit-panel`);
-        const bigNumContainer = panelId === -1 ? $(`.panelDisplay .big-number-display-container`) : $(`#panel${panelId} .big-number-display-container`);
+        //const bigNumContainer = panelId === -1 ? $(`.panelDisplay .big-number-display-container`) : $(`#panel${panelId} .big-number-display-container`);
         // Hide conflicting elements
         panelChartEl.hide();
 
@@ -2288,7 +2288,7 @@ function mergeGraphs(chartType, panelId = -1) {
             if (currentPanel.queryData && currentPanel.queryData.queriesData && currentPanel.queryData.queriesData.length) {
                 const queryData = currentPanel.queryData.queriesData[0];
                 console.log('mergeGraphs fetching data for:', { query: queryData.queries[0].query });
-                const rawTimeSeriesData = await fetchTimeSeriesData(queryData); // Fetch fresh data
+                // const rawTimeSeriesData = await fetchTimeSeriesData(queryData); // Fetch fresh data
                 if (rawTimeSeriesData && rawTimeSeriesData.values) {
                     $.each(rawTimeSeriesData.values, function (_index, valueArray) {
                         $.each(valueArray, function (_index, value) {
@@ -2302,16 +2302,13 @@ function mergeGraphs(chartType, panelId = -1) {
 
             if (bigNumVal === null || bigNumVal === undefined) {
                 console.log('No valid data found, showing NA');
-                if (!bigNumContainer.find('.big-number').length || bigNumContainer.find('.big-number').text() === 'NA') {
-                    bigNumContainer.empty().append('<div class="big-number">NA</div><div class="message">Your query returned NA, adjust your query.</div>');
-                }
             } else {
                 console.log('mergeGraphs calculated bigNumVal:', { bigNumVal });
-                bigNumContainer.empty(); // Clear for new valid data
                 displayBigNumber(bigNumVal.toString(), panelId, dataType, currentPanel.panelIndex);
             }
-            bigNumContainer.show(); // Ensure it’s visible
         }, 0);
+
+
 
         return; // Exit early to avoid chart rendering for number type
     }
