@@ -119,7 +119,7 @@ let navbarComponent = `
         </div>
         <div class="menu nav-infrastructure infrastructure-dropdown-toggle">
                 <div class="menu-header">
-                    <a class="nav-links" href="./kubernetes-overview.html">
+                    <a class="nav-links" href="./infrastructure.html">
                         <span class="icon-infrastructure"></span>
                         <span class="nav-link-text-drpdwn">Infrastructure</span>
                     </a>
@@ -134,7 +134,6 @@ let navbarComponent = `
                             <img class="nav-dropdown-icon kubernetes-arrow orange" src="assets/arrow-btn.svg" alt="Dropdown Arrow">
                         </div>
                         <ul class="kubernetes-dropdown">
-                            <a href="./kubernetes-overview.html"><li class="kubernetes-link">Overview</li></a>
                             <a href="./kubernetes-view.html?type=clusters"><li class="kubernetes-link">Cluster</li></a>
                             <a href="./kubernetes-view.html?type=namespaces"><li class="kubernetes-link">Namespaces</li></a>
                             <a href="./kubernetes-view.html?type=workloads"><li class="kubernetes-link">Workloads</li></a>
@@ -439,21 +438,36 @@ $(document).ready(function () {
 
     // Attach click events to each dropdown toggle
     dropdownConfigs.forEach(config => {
-        $(`.${config.menuClass} .menu-header, .${config.menuClass} .nav-links`).on('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
+        if (config.name === 'Infrastructure') {
+            // For Infrastructure, separate behaviors for link and arrow
+            $(`.${config.menuClass} .menu-header a.nav-links`).on('click', function(e) {
+                // Don't prevent default - allow navigation to infrastructure.html
+                e.stopPropagation();
+                saveCurrentDropdownStates();
+                sessionStorage.setItem('preserveDropdownStates', 'true');
+                // Continue with normal link behavior (navigation)
+            });
 
-            // Only toggle the dropdown that was clicked
-            toggleDropdown($(this).closest('.menu'), config.name, config.dropdownClass, config.arrowClass);
-        });
+            // Only toggle dropdown when arrow is clicked
+            $(`.${config.menuClass} .${config.arrowClass}`).on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleDropdown($(this).closest('.menu'), config.name, config.dropdownClass, config.arrowClass);
+            });
+        } else {
+            // For all other menus, keep the original behavior
+            $(`.${config.menuClass} .menu-header, .${config.menuClass} .nav-links`).on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleDropdown($(this).closest('.menu'), config.name, config.dropdownClass, config.arrowClass);
+            });
 
-        $(`.${config.menuClass} .${config.arrowClass}`).on('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            // Only toggle the dropdown whose arrow was clicked
-            toggleDropdown($(this).closest('.menu'), config.name, config.dropdownClass, config.arrowClass);
-        });
+            $(`.${config.menuClass} .${config.arrowClass}`).on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleDropdown($(this).closest('.menu'), config.name, config.dropdownClass, config.arrowClass);
+            });
+        }
 
         $(`.${config.dropdownClass} a`).on('click', function(e) {
             e.stopPropagation();
