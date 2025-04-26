@@ -35,7 +35,7 @@ window.runTimechart = false; // Default to false, no UI change unless set
 window.timechartData = null; // Store timechart data
 
 window.updateHistogram = function (logData) {
-    console.log("updateHistogram called with data:", logData);
+    console.log('updateHistogram called with data:', logData);
 
     // Ensure DOM is ready and canvas exists
     $(document).ready(function () {
@@ -47,11 +47,11 @@ window.updateHistogram = function (logData) {
 
         // Aggregate logs by date for the histogram
         const dateCounts = {};
-        logData.forEach(log => {
+        logData.forEach((log) => {
             const timestamp = log.timestamp; // Assuming timestamp is in milliseconds
             const date = moment(timestamp).format('YYYY-MM-DD'); // Convert to date string
 
-            console.log("Processing log with timestamp:", timestamp, "Date:", date);
+            console.log('Processing log with timestamp:', timestamp, 'Date:', date);
 
             if (!dateCounts[date]) {
                 dateCounts[date] = 0;
@@ -59,14 +59,14 @@ window.updateHistogram = function (logData) {
             dateCounts[date]++;
         });
 
-        console.log("Aggregated date counts:", dateCounts);
+        console.log('Aggregated date counts:', dateCounts);
 
         // Convert aggregated data to arrays for Chart.js
         const dates = Object.keys(dateCounts);
         const counts = Object.values(dateCounts);
 
-        console.log("Dates for histogram:", dates);
-        console.log("Counts for histogram:", counts);
+        console.log('Dates for histogram:', dates);
+        console.log('Counts for histogram:', counts);
 
         // Initialize or update the histogram
         if (!chart) {
@@ -75,13 +75,15 @@ window.updateHistogram = function (logData) {
                 type: 'bar',
                 data: {
                     labels: dates,
-                    datasets: [{
-                        label: 'Log Count',
-                        data: counts,
-                        backgroundColor: 'rgb(75, 192, 192)',
-                        borderColor: 'rgb(75, 192, 192)',
-                        borderWidth: 1,
-                    }],
+                    datasets: [
+                        {
+                            label: 'Log Count',
+                            data: counts,
+                            backgroundColor: 'rgb(75, 192, 192)',
+                            borderColor: 'rgb(75, 192, 192)',
+                            borderWidth: 1,
+                        },
+                    ],
                 },
                 options: {
                     responsive: true,
@@ -116,7 +118,7 @@ window.updateHistogram = function (logData) {
                 },
                 plugins: [verticalLinePlugin],
             });
-            console.log("Chart initialized successfully for logs.");
+            console.log('Chart initialized successfully for logs.');
 
             // Add mouse event listeners for dragging
             let isDragging = false;
@@ -148,31 +150,31 @@ window.updateHistogram = function (logData) {
             chart.data.labels = dates;
             chart.data.datasets[0].data = counts;
             chart.update();
-            console.log("Histogram updated successfully for logs.");
+            console.log('Histogram updated successfully for logs.');
         }
     });
 };
 
 // Function to handle timechart visualization (optional, for Visualization tab)
 window.updateTimechartVisualization = function (timechartData) {
-    console.log("updateTimechartVisualization called with data:", timechartData);
+    console.log('updateTimechartVisualization called with data:', timechartData);
 
     // Ensure DOM is ready
     $(document).ready(function () {
         // Example: Assume timechartData has buckets like [{"timestamp": 1740582133595, "count": 100}]
         if (!timechartData || !timechartData.buckets) {
-            console.warn("No timechart data available.");
+            console.warn('No timechart data available.');
             return;
         }
 
         const buckets = timechartData.buckets || timechartData.TimechartUpdate?.buckets || timechartData.TimechartComplete?.buckets;
         if (!buckets) {
-            console.warn("No buckets found in timechart data.");
+            console.warn('No buckets found in timechart data.');
             return;
         }
 
-        const dates = buckets.map(bucket => moment(bucket.timestamp).format('YYYY-MM-DD'));
-        const counts = buckets.map(bucket => bucket.count || bucket.value); // Handle different field names
+        const dates = buckets.map((bucket) => moment(bucket.timestamp).format('YYYY-MM-DD'));
+        const counts = buckets.map((bucket) => bucket.count || bucket.value); // Handle different field names
 
         // Initialize or update a separate chart for timechart (e.g., in Visualization tab)
         const timechartCanvas = document.getElementById('timechart-visualization');
@@ -184,13 +186,15 @@ window.updateTimechartVisualization = function (timechartData) {
                     type: 'bar',
                     data: {
                         labels: dates,
-                        datasets: [{
-                            label: 'Timechart Count',
-                            data: counts,
-                            backgroundColor: 'rgb(255, 99, 132)',
-                            borderColor: 'rgb(255, 99, 132)',
-                            borderWidth: 1,
-                        }],
+                        datasets: [
+                            {
+                                label: 'Timechart Count',
+                                data: counts,
+                                backgroundColor: 'rgb(255, 99, 132)',
+                                borderColor: 'rgb(255, 99, 132)',
+                                borderWidth: 1,
+                            },
+                        ],
                     },
                     options: {
                         responsive: true,
@@ -222,13 +226,13 @@ window.updateTimechartVisualization = function (timechartData) {
                     },
                 });
                 window.timechart = timechart; // Store for future updates
-                console.log("Timechart visualization initialized successfully.");
+                console.log('Timechart visualization initialized successfully.');
             } else {
                 // Update existing timechart
                 window.timechart.data.labels = dates;
                 window.timechart.data.datasets[0].data = counts;
                 window.timechart.update();
-                console.log("Timechart visualization updated successfully.");
+                console.log('Timechart visualization updated successfully.');
             }
         } else {
             console.warn("Timechart canvas '#timechart-visualization' not found in DOM.");

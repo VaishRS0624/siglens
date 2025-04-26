@@ -309,11 +309,11 @@ const gridOptions = {
         const start = moment().subtract(7, 'days');
         const end = moment();
         const initialData = {
-            searchText: "*",
+            searchText: '*',
             startEpoch: start.valueOf(),
             endEpoch: end.valueOf(),
             runTimechart: false, // Default to false, no UI change unless explicitly set
-            queryLanguage: "Splunk QL"
+            queryLanguage: 'Splunk QL',
         };
         if (typeof doSearch === 'function') {
             doSearch(initialData);

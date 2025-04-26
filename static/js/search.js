@@ -89,7 +89,7 @@ function doSearch(data) {
             try {
                 const queryData = {
                     ...data,
-                    state: 'RUNNING' // Add default state if required by backend
+                    state: 'RUNNING', // Add default state if required by backend
                 };
                 socket.send(JSON.stringify(data));
             } catch (e) {
@@ -116,7 +116,7 @@ function doSearch(data) {
 
                     if (jsonEvent && jsonEvent.hits && jsonEvent.hits.totalMatched) {
                         totalHits = jsonEvent.hits.totalMatched;
-                        console.log("rendering total hits:", totalHits, ". elapsedTimeMS:", totalTime);
+                        console.log('rendering total hits:', totalHits, '. elapsedTimeMS:', totalTime);
                         lastKnownHits = totalHits;
 
                         // Update logsRowData with new records for histogram
@@ -260,7 +260,7 @@ function doSearch(data) {
         socket.onerror = function (error) {
             console.error('WebSocket error:', error);
             errorMessages.push(`WebSocket error: ${error}`);
-            $('#initial-response').text("WebSocket error: Unable to connect. Check backend server.");
+            $('#initial-response').text('WebSocket error: Unable to connect. Check backend server.');
             // Retry with the same logic as onclose
             let retryCount = 0;
             const maxRetries = 5;
@@ -277,7 +277,7 @@ function doSearch(data) {
             };
             retry();
         };
-    }).catch(error => {
+    }).catch((error) => {
         console.error('doSearch promise rejected:', error);
         $('#initial-response').text(`Error: ${error.message || 'WebSocket connection failed'}`);
     });
